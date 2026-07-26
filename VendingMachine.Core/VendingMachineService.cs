@@ -2,6 +2,8 @@ namespace VendingMachine.Core;
 
 public class VendingMachineService
 {
+    private readonly IChangeStrategy _changeStrategy;
+
     // Denomination in cents, how many coins the machine holds.
     private readonly Dictionary<int, int> _coins = new()
     {
@@ -17,8 +19,10 @@ public class VendingMachineService
 
     private readonly Dictionary<string, Product> _products;
 
-    public VendingMachineService()
+    public VendingMachineService(IChangeStrategy changeStrategy)
     {
+        _changeStrategy = changeStrategy;
+
         // Hardcoded for now, this would come from a database or config eventually.
         var catalogue = new[]
         {
@@ -60,31 +64,19 @@ public class VendingMachineService
             _coins[denomination] = _coins.GetValueOrDefault(denomination) + count;
         }
 
-        var change = MakeChange(paid - product.Price);
-        product.Quantity--;
-
-        return new PurchaseResult { ProductName = product.Name, Change = change };
-    }
-
-    private Dictionary<int, int> MakeChange(int amount)
-    {
-        var change = new Dictionary<int, int>();
-
-        foreach (var denomination in _coins.Keys.OrderByDescending(d => d))
-        {
-            while (amount >= denomination && _coins[denomination] > 0)
-            {
-                change[denomination] = change.GetValueOrDefault(denomination) + 1;
-                _coins[denomination]--;
-                amount -= denomination;
-            }
-        }
-
-        if (amount > 0)
+        var change = _changeStrategy.Calculate(paid - product.Price, _coins);
+        if (change is null)
         {
             throw new InvalidOperationException("Cannot make change.");
         }
 
-        return change;
+        foreach (var (denomination, count) in change)
+        {
+            _coins[denomination] -= count;
+        }
+
+        product.Quantity--;
+
+        return new PurchaseResult { ProductName = product.Name, Change = change };
     }
 }

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using VendingMachine.Api.Contracts;
-using VendingMachine.Api.Domain;
+using VendingMachine.Core;
 
 namespace VendingMachine.Api.Controllers;
 

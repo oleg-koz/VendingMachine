@@ -1,4 +1,4 @@
-namespace VendingMachine.Api.Domain;
+namespace VendingMachine.Core;
 
 public class PurchaseResult
 {

@@ -1,6 +1,6 @@
 namespace VendingMachine.Core;
 
-public sealed class VendingMachineService
+public sealed class VendingMachineService : IVendingMachine
 {
     private readonly IChangeStrategy _changeStrategy;
     private MachineState _state;

@@ -10,6 +10,11 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 builder.Services.AddSingleton<IChangeStrategy, MinimumCoinChangeStrategy>();
+builder.Services.AddSingleton<IVendingMachine>(provider =>
+    new SynchronizedMachine(
+        new VendingMachineService(
+            MachineSeed.OpeningState(),
+            provider.GetRequiredService<IChangeStrategy>())));
 
 var app = builder.Build();
 

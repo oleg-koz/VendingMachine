@@ -14,12 +14,12 @@ public class VendingMachineServiceTests
     [Fact]
     public void Sells_an_item_and_gives_the_right_change()
     {
-        // 2x20c for a 25c item.
+        // 1 EUR for an 85c item and 15c back, in as few coins as possible.
         var machine = Build(
             CoinBundle.Of((EuroCoins.TenCents, 5), (EuroCoins.FiveCents, 5)),
             new StockLine(Akvile, 3));
 
-        var result = machine.Purchase("A1", CoinBundle.Of((EuroCoins.TwentyCents, 2)));
+        var result = machine.Purchase("A1", CoinBundle.Of((EuroCoins.OneEuro, 1)));
 
         Assert.True(result.Succeeded);
         Assert.Equal(15, result.CoinsReturned.TotalValue);
@@ -35,11 +35,11 @@ public class VendingMachineServiceTests
             new StockLine(Akvile, 3));
         var floatBefore = machine.State.FloatValue;
 
-        machine.Purchase("A1", CoinBundle.Of((EuroCoins.TwentyCents, 2)));
+        machine.Purchase("A1", CoinBundle.Of((EuroCoins.OneEuro, 1)));
 
         Assert.True(machine.State.Inventory.TryGet("A1", out var line));
         Assert.Equal(2, line.Quantity);
-        Assert.Equal(floatBefore + 25, machine.State.FloatValue);
+        Assert.Equal(floatBefore + 85, machine.State.FloatValue);
     }
 
     [Fact]
@@ -47,7 +47,9 @@ public class VendingMachineServiceTests
     {
         var machine = Build(CoinBundle.Empty, new StockLine(Akvile, 1));
 
-        var result = machine.Purchase("A1", CoinBundle.Of((EuroCoins.TwentyCents, 1), (EuroCoins.FiveCents, 1)));
+        var result = machine.Purchase("A1", CoinBundle.Of(
+            (EuroCoins.FiftyCents, 1), (EuroCoins.TwentyCents, 1),
+            (EuroCoins.TenCents, 1), (EuroCoins.FiveCents, 1)));
 
         Assert.True(result.Succeeded);
         Assert.True(result.CoinsReturned.IsEmpty);
@@ -56,13 +58,14 @@ public class VendingMachineServiceTests
     [Fact]
     public void Change_can_come_from_the_coins_just_inserted()
     {
-        // Empty float. The only 20c in the machine is the one the customer paid with, and the sale only works because it is available to hand back.
-        var machine = Build(CoinBundle.Empty, new StockLine(Akvile, 1));
+        // Empty float, so the 20c handed back can only be one of the two just inserted.
+        var drink = new Product("D1", "Monster", 20);
+        var machine = Build(CoinBundle.Empty, new StockLine(drink, 1));
 
-        var result = machine.Purchase("A1", CoinBundle.Of((EuroCoins.TwentyCents, 1), (EuroCoins.TenCents, 1)));
+        var result = machine.Purchase("D1", CoinBundle.Of((EuroCoins.TwentyCents, 2)));
 
         Assert.True(result.Succeeded);
-        Assert.Equal(5, result.CoinsReturned.TotalValue);
+        Assert.Equal(20, result.CoinsReturned.TotalValue);
     }
 
     [Fact]
@@ -81,7 +84,7 @@ public class VendingMachineServiceTests
     {
         var machine = Build(CoinBundle.Empty, new StockLine(Akvile, 0));
 
-        var result = machine.Purchase("A1", CoinBundle.Of((EuroCoins.TwentyCents, 2)));
+        var result = machine.Purchase("A1", CoinBundle.Of((EuroCoins.OneEuro, 1)));
 
         Assert.Equal(PurchaseFailure.OutOfStock, result.Failure);
     }
@@ -118,7 +121,9 @@ public class VendingMachineServiceTests
     {
         var machine = Build(CoinBundle.Empty, new StockLine(Akvile, 1));
 
-        var result = machine.Purchase("a1", CoinBundle.Of((EuroCoins.TwentyCents, 1), (EuroCoins.FiveCents, 1)));
+        var result = machine.Purchase("a1", CoinBundle.Of(
+            (EuroCoins.FiftyCents, 1), (EuroCoins.TwentyCents, 1),
+            (EuroCoins.TenCents, 1), (EuroCoins.FiveCents, 1)));
 
         Assert.True(result.Succeeded);
     }

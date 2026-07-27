@@ -1,6 +1,39 @@
 @VendingMachine.Api_HostAddress = http://localhost:5177
 
-GET {{VendingMachine.Api_HostAddress}}/weatherforecast/
+### Catalog with remaining stock
+GET {{VendingMachine.Api_HostAddress}}/api/vendingmachine/products
 Accept: application/json
 
-###
+POST {{VendingMachine.Api_HostAddress}}/api/vendingmachine/purchase
+Content-Type: application/json
+
+{
+  "productId": "B1",
+  "coins": { "100": 1, "50": 1 }
+}
+
+POST {{VendingMachine.Api_HostAddress}}/api/vendingmachine/purchase
+Content-Type: application/json
+
+{
+  "productId": "A1",
+  "coins": { "50": 1, "20": 1, "10": 1, "5": 1 }
+}
+
+### Not enough money - 400
+POST {{VendingMachine.Api_HostAddress}}/api/vendingmachine/purchase
+Content-Type: application/json
+
+{
+  "productId": "C2",
+  "coins": { "100": 1 }
+}
+
+### Unknown selection - 404
+POST {{VendingMachine.Api_HostAddress}}/api/vendingmachine/purchase
+Content-Type: application/json
+
+{
+  "productId": "Z9",
+  "coins": { "100": 1 }
+}

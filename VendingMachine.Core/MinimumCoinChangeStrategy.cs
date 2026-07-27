@@ -1,49 +1,45 @@
 namespace VendingMachine.Core;
 
 // Hands back the amount in as few coins as possible.
-//
-// The obvious approach - take the biggest coin that fits, repeat - only works when the supply
-// of coins is unlimited. A vending machine's float is finite, so it fails: owe 6c from 1x5c and
-// 3x2c and it grabs the 5c, then needs a 1c that isn't there, while 3x2c was available.
-//
-// So this is bounded coin change. dp[i, j] is the fewest coins that make j using the first i
-// denominations, trying every feasible count of the current coin. Roughly
-// O(amount * sum of min(count, amount / value)), which is nothing at the amounts a vending
-// machine deals in.
-public class MinimumCoinChangeStrategy : IChangeStrategy
+// So this is bounded coin change. dp[i, j] is the fewest coins making j from the first i denominations,
+// trying every feasible count of the current coin.
+// Roughly O(amount * sum of min(count, amount / value)) - nothing at vending machine amounts.
+public sealed class MinimumCoinChangeStrategy : IChangeStrategy
 {
     private const int Unreachable = int.MaxValue;
 
-    public Dictionary<int, int>? Calculate(int amount, Dictionary<int, int> available)
+    public CoinBundle? Calculate(int amount, CoinBundle available)
     {
-        if (amount < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(amount));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(amount);
+        ArgumentNullException.ThrowIfNull(available);
 
         if (amount == 0)
         {
-            return new Dictionary<int, int>();
+            return CoinBundle.Empty;
         }
 
-        var denominations = available
-            .Where(coin => coin.Value > 0)
-            .Select(coin => coin.Key)
-            .OrderByDescending(value => value)
-            .ToArray();
+        // Cheap rejection before allocating the table.
+        if (amount > available.TotalValue)
+        {
+            return null;
+        }
 
-        var dp = new int[denominations.Length + 1, amount + 1];
-        var taken = new int[denominations.Length + 1, amount + 1];
+        var denominations = available.DenominationsDescending;
+        var count = denominations.Count;
+
+        var dp = new int[count + 1, amount + 1];
+        var taken = new int[count + 1, amount + 1];
 
         for (var j = 1; j <= amount; j++)
         {
             dp[0, j] = Unreachable;
         }
 
-        for (var i = 1; i <= denominations.Length; i++)
+        for (var i = 1; i <= count; i++)
         {
-            var value = denominations[i - 1];
-            var stock = available[value];
+            var denomination = denominations[i - 1];
+            var value = denomination.Cents;
+            var stock = available[denomination];
 
             for (var j = 0; j <= amount; j++)
             {
@@ -71,15 +67,15 @@ public class MinimumCoinChangeStrategy : IChangeStrategy
             }
         }
 
-        if (dp[denominations.Length, amount] == Unreachable)
+        if (dp[count, amount] == Unreachable)
         {
             return null;
         }
 
         // Walk the choices back out of the table.
-        var change = new Dictionary<int, int>();
+        var coins = new List<KeyValuePair<Denomination, int>>();
         var remaining = amount;
-        for (var i = denominations.Length; i >= 1 && remaining > 0; i--)
+        for (var i = count; i >= 1 && remaining > 0; i--)
         {
             var used = taken[i, remaining];
             if (used == 0)
@@ -87,10 +83,10 @@ public class MinimumCoinChangeStrategy : IChangeStrategy
                 continue;
             }
 
-            change[denominations[i - 1]] = used;
-            remaining -= used * denominations[i - 1];
+            coins.Add(KeyValuePair.Create(denominations[i - 1], used));
+            remaining -= used * denominations[i - 1].Cents;
         }
 
-        return change;
+        return CoinBundle.FromCounts(coins);
     }
 }

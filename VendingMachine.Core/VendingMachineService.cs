@@ -1,82 +1,77 @@
 namespace VendingMachine.Core;
 
-public class VendingMachineService
+public sealed class VendingMachineService
 {
     private readonly IChangeStrategy _changeStrategy;
+    private MachineState _state;
 
-    // Denomination in cents, how many coins the machine holds.
-    private readonly Dictionary<int, int> _coins = new()
+    public VendingMachineService(MachineState initialState, IChangeStrategy changeStrategy)
     {
-        [1] = 20,
-        [2] = 20,
-        [5] = 30,
-        [10] = 40,
-        [20] = 40,
-        [50] = 20,
-        [100] = 10,
-        [200] = 5
-    };
+        ArgumentNullException.ThrowIfNull(initialState);
+        ArgumentNullException.ThrowIfNull(changeStrategy);
 
-    private readonly Dictionary<string, Product> _products;
-
-    public VendingMachineService(IChangeStrategy changeStrategy)
-    {
+        _state = initialState;
         _changeStrategy = changeStrategy;
-
-        // Hardcoded for now, this would come from a database or config eventually.
-        var catalogue = new[]
-        {
-            new Product { Id = "A1", Name = "Akvile 0.5l", Price = 85, Quantity = 10 },
-            new Product { Id = "A2", Name = "Vytautas 0.5l", Price = 95, Quantity = 10 },
-            new Product { Id = "B1", Name = "Cola 0.33l", Price = 145, Quantity = 8 },
-            new Product { Id = "B2", Name = "Elmenhoster 0.33l", Price = 145, Quantity = 8 },
-            new Product { Id = "C1", Name = "Nestea 0.5l", Price = 165, Quantity = 6 },
-            new Product { Id = "C2", Name = "Redbull 0.33l", Price = 190, Quantity = 4 }
-        };
-
-        _products = catalogue.ToDictionary(p => p.Id, StringComparer.OrdinalIgnoreCase);
     }
 
-    public IEnumerable<Product> GetProducts() => _products.Values.OrderBy(p => p.Id);
+    public MachineState State => _state;
 
-    public PurchaseResult Purchase(string productId, Dictionary<int, int> payment)
+    public PurchaseResult Purchase(string productId, CoinBundle payment)
     {
-        if (!_products.TryGetValue(productId, out var product))
+        ArgumentException.ThrowIfNullOrWhiteSpace(productId);
+        ArgumentNullException.ThrowIfNull(payment);
+
+        var state = _state;
+
+        if (!state.Inventory.TryGet(productId, out var line))
         {
-            throw new ArgumentException($"No product '{productId}'.");
+            return PurchaseResult.Rejected(PurchaseFailure.UnknownProduct, payment);
         }
 
-        if (product.Quantity == 0)
+        if (line.Quantity == 0)
         {
-            throw new InvalidOperationException($"'{productId}' is sold out.");
+            return PurchaseResult.Rejected(PurchaseFailure.OutOfStock, payment);
         }
 
-        var paid = payment.Sum(p => p.Key * p.Value);
-        if (paid < product.Price)
+        if (payment.TotalValue < line.Product.Price)
         {
-            throw new InvalidOperationException($"'{productId}' costs {product.Price}c, paid {paid}c.");
+            return PurchaseResult.Rejected(PurchaseFailure.InsufficientPayment, payment);
         }
 
-        // The coins the customer inserted go into the machine, so they can be given out as
-        // change to whoever comes next.
-        foreach (var (denomination, count) in payment)
-        {
-            _coins[denomination] = _coins.GetValueOrDefault(denomination) + count;
-        }
+        // The inserted coins join the float before change is worked out.
+        var floatWithPayment = state.Float.Add(payment);
+        var change = _changeStrategy.Calculate(payment.TotalValue - line.Product.Price, floatWithPayment);
 
-        var change = _changeStrategy.Calculate(paid - product.Price, _coins);
         if (change is null)
         {
-            throw new InvalidOperationException("Cannot make change.");
+            return PurchaseResult.Rejected(PurchaseFailure.InsufficientChange, payment);
         }
 
-        foreach (var (denomination, count) in change)
+        if (!floatWithPayment.TryRemove(change, out var remainingFloat))
         {
-            _coins[denomination] -= count;
+            throw new InvalidOperationException("Change strategy returned coins the machine does not hold.");
         }
 
-        product.Quantity--;
+        if (!state.Inventory.TryTakeOne(productId, out var remainingStock))
+        {
+            throw new InvalidOperationException($"Stock for '{productId}' vanished mid-purchase.");
+        }
 
-        return new PurchaseResult { ProductName = product.Name, Change = change };
+        // Every refusal returns before this line, so a failed purchase can't bank coins without dispensing.
+        _state = state with { Float = remainingFloat, Inventory = remainingStock };
+
+        return PurchaseResult.Dispensed(line.Product, change);
+    }
+
+    public void LoadCoins(CoinBundle coins)
+    {
+        ArgumentNullException.ThrowIfNull(coins);
+        _state = _state with { Float = _state.Float.Add(coins) };
+    }
+
+    public void Restock(Product product, int quantity)
+    {
+        ArgumentNullException.ThrowIfNull(product);
+        _state = _state with { Inventory = _state.Inventory.AddStock(product, quantity) };
     }
 }

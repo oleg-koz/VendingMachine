@@ -1,3 +1,4 @@
+using VendingMachine.Api;
 using VendingMachine.Core;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,7 +10,6 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 builder.Services.AddSingleton<IChangeStrategy, MinimumCoinChangeStrategy>();
-builder.Services.AddSingleton<VendingMachineService>();
 
 var app = builder.Build();
 

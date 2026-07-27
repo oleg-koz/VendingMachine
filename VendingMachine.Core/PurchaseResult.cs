@@ -1,11 +1,34 @@
 namespace VendingMachine.Core;
 
-public class PurchaseResult
+public enum PurchaseFailure
 {
-    public string ProductName { get; set; } = "";
+    UnknownProduct,
+    OutOfStock,
+    InsufficientPayment,
+    InsufficientChange
+}
 
-    // Denomination in cents, how many coins.
-    public Dictionary<int, int> Change { get; set; } = new();
+// Coins come back either way, as change on success, or as a refund on refusal, so they are one property.
+public sealed record PurchaseResult
+{
+    private PurchaseResult(Product? product, CoinBundle coinsReturned, PurchaseFailure? failure)
+    {
+        Product = product;
+        CoinsReturned = coinsReturned;
+        Failure = failure;
+    }
 
-    public int ChangeValue => Change.Sum(c => c.Key * c.Value);
+    public static PurchaseResult Dispensed(Product product, CoinBundle change) =>
+        new(product, change, failure: null);
+
+    public static PurchaseResult Rejected(PurchaseFailure reason, CoinBundle refund) =>
+        new(product: null, refund, reason);
+
+    public bool Succeeded => Failure is null;
+
+    public Product? Product { get; }
+
+    public CoinBundle CoinsReturned { get; }
+
+    public PurchaseFailure? Failure { get; }
 }

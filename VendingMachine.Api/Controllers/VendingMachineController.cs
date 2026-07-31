@@ -8,9 +8,9 @@ namespace VendingMachine.Api.Controllers;
 [Route("api/[controller]")]
 public class VendingMachineController : ControllerBase
 {
-    private readonly VendingMachineService _service;
+    private readonly IVendingMachine _service;
 
-    public VendingMachineController(VendingMachineService service)
+    public VendingMachineController(IVendingMachine service)
     {
         _service = service;
     }
